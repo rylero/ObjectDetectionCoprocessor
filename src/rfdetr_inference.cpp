@@ -74,6 +74,29 @@ float RFDETRInference::sigmoid(float x) const noexcept {
     return 1.0f / (1.0f + std::exp(-x));
 }
 
+std::vector<float> RFDETRInference::preprocess_image(cv::Mat image, int& orig_h, int& orig_w) {
+    orig_h = image.rows;
+    orig_w = image.cols;
+
+    cv::Mat resized_image;
+    cv::resize(image, resized_image, cv::Size(config_.resolution, config_.resolution), 0, 0, cv::INTER_LINEAR);
+    cv::cvtColor(resized_image, resized_image, cv::COLOR_BGR2RGB);
+    resized_image.convertTo(resized_image, CV_32F, 1.0 / 255.0);
+
+    const size_t input_tensor_size = 1 * 3 * config_.resolution * config_.resolution;
+    std::vector<float> input_tensor_values(input_tensor_size);
+    std::vector<cv::Mat> channels;
+    cv::split(resized_image, channels);
+    float* input_ptr = input_tensor_values.data();
+    for (int c = 0; c < 3; ++c) {
+        std::memcpy(input_ptr, channels[c].data, config_.resolution * config_.resolution * sizeof(float));
+        input_ptr += config_.resolution * config_.resolution;
+    }
+
+    normalize_image(input_tensor_values, config_.resolution * config_.resolution);
+    return input_tensor_values;
+}
+
 std::vector<float> RFDETRInference::preprocess_image(const std::filesystem::path& image_path, int& orig_h, int& orig_w) {
     if (!std::filesystem::exists(image_path)) {
         throw std::runtime_error("Image file does not exist: " + image_path.string());
