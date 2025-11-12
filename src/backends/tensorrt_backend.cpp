@@ -237,7 +237,20 @@ bool TensorRTBackend::build_engine_from_onnx(
 
     // Build engine
     std::cout << "[TensorRT] Building engine... This may take a few minutes." << std::endl;
-    engine_.reset(builder->buildEngineWithConfig(*network, *config));
+    //engine_.reset(builder->buildEngineWithConfig(*network, *config));
+    // ---- TensorRT 10.3: serialize → deserialize -----------------
+    auto plan = builder->buildSerializedNetwork(*network, *config);
+    if (!plan) {
+        logger_.log(nvinfer1::ILogger::Severity::kERROR,
+                   "buildSerializedNetwork failed");
+        throw std::runtime_error("TensorRT engine build failed");
+    }
+    engine_.reset(runtime_->deserializeCudaEngine(plan->data(), plan->size()));
+    if (!engine_) {
+        logger_.log(nvinfer1::ILogger::Severity::kERROR,
+                   "deserializeCudaEngine failed");
+        throw std::runtime_error("TensorRT engine build failed");
+    }
     if (!engine_) {
         std::cerr << "Failed to build TensorRT engine" << std::endl;
         return false;
