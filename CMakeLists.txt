@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # --- Backend Selection Options ---
-option(USE_ONNX_RUNTIME "Build with ONNX Runtime backend support" ON)
-option(USE_TENSORRT "Build with TensorRT backend support" OFF)
+option(USE_ONNX_RUNTIME "Build with ONNX Runtime backend support" OFF)
+option(USE_TENSORRT "Build with TensorRT backend support" ON)
 
 # Validate that at least one backend is enabled
 if(NOT USE_ONNX_RUNTIME AND NOT USE_TENSORRT)
@@ -88,61 +88,22 @@ if(USE_TENSORRT)
     
     # TensorRT version configuration
     set(TRT_MAJOR "10")
-    set(TRT_MINOR ".13")
-    set(TRT_PATCH ".3")
-    set(TRT_BUILD ".9")
+    set(TRT_MINOR ".3")
+    set(TRT_PATCH ".0")
+    set(TRT_BUILD ".30")
     set(TRT_VERSION "${TRT_MAJOR}${TRT_MINOR}${TRT_PATCH}${TRT_BUILD}")
-    set(TRT_CUDA_VERSION "13.0")
+    set(TRT_CUDA_VERSION "12.6")
     
-    set(TRT_ARCHIVE_BASENAME "TensorRT-${TRT_VERSION}.Linux.x86_64-gnu.cuda-${TRT_CUDA_VERSION}")
-    set(TRT_ARCHIVE_NAME "${TRT_ARCHIVE_BASENAME}.tar.gz")
-    set(TRT_URL "https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/${TRT_MAJOR}${TRT_MINOR}${TRT_PATCH}/tars/${TRT_ARCHIVE_NAME}")
+    set(TENSORRT_INCLUDE_DIR "/usr/include/aarch64-linux-gnu")
+    set(TENSORRT_LIBRARY "/usr/lib/aarch64-linux-gnu/libnvinfer.so")
+    set(TENSORRT_ONNX_PARSER "/usr/lib/aarch64-linux-gnu/libnvonnxparser.so")
     
-    set(TRT_DEPS_DIR "${CMAKE_BINARY_DIR}/_deps")
-    set(TRT_DOWNLOAD_PATH "${TRT_DEPS_DIR}/${TRT_ARCHIVE_NAME}")
-    set(TRT_EXTRACT_DIR "${TRT_DEPS_DIR}")
-    set(TRT_INSTALL_DIR "${TRT_EXTRACT_DIR}/TensorRT-${TRT_VERSION}")
-    
-    if(NOT EXISTS "${TRT_INSTALL_DIR}/include/NvInfer.h")
-        message(STATUS "TensorRT not found in build directory. Downloading and extracting...")
-        file(MAKE_DIRECTORY "${TRT_DEPS_DIR}")
-        if(NOT EXISTS "${TRT_DOWNLOAD_PATH}")
-            message(STATUS "Downloading TensorRT from ${TRT_URL}...")
-            file(DOWNLOAD ${TRT_URL} ${TRT_DOWNLOAD_PATH}
-                 SHOW_PROGRESS
-                 TIMEOUT 600
-                 STATUS download_status)
-            list(GET download_status 0 download_code)
-            list(GET download_status 1 download_message)
-            if(NOT download_code EQUAL 0)
-                message(FATAL_ERROR "Download failed: ${download_message}")
-            endif()
-            message(STATUS "Download completed: ${TRT_DOWNLOAD_PATH}")
-        else()
-            message(STATUS "Using existing TensorRT archive: ${TRT_DOWNLOAD_PATH}")
-        endif()
-        message(STATUS "Extracting ${TRT_DOWNLOAD_PATH} to ${TRT_EXTRACT_DIR}...")
-        execute_process(
-            COMMAND ${CMAKE_COMMAND} -E tar xzf "${TRT_DOWNLOAD_PATH}"
-            WORKING_DIRECTORY "${TRT_EXTRACT_DIR}"
-            RESULT_VARIABLE extract_result
-        )
-        if(NOT extract_result EQUAL 0)
-            message(FATAL_ERROR "Extraction failed with result: ${extract_result}")
-        endif()
-        message(STATUS "Extraction completed.")
-        if(NOT EXISTS "${TRT_INSTALL_DIR}/include/NvInfer.h")
-            message(FATAL_ERROR "Extraction failed: expected directory not found at ${TRT_INSTALL_DIR}")
-        endif()
-    else()
-        message(STATUS "Found existing TensorRT at: ${TRT_INSTALL_DIR}")
+    # --- CHECK CUDA INCLUDE PATH (early validation) ---
+    set(CUDA_TOOLKIT_INCLUDE "/usr/local/cuda-12.6/targets/aarch64-linux/include")
+    if(NOT EXISTS "${CUDA_TOOLKIT_INCLUDE}/cuda_runtime_api.h")
+        message(FATAL_ERROR "CUDA headers not found at ${CUDA_TOOLKIT_INCLUDE}")
     endif()
-    
-    set(TENSORRT_ROOTDIR "${TRT_INSTALL_DIR}" CACHE PATH "Path to TensorRT root directory")
-    set(TENSORRT_INCLUDE_DIR "${TENSORRT_ROOTDIR}/include")
-    set(TENSORRT_LIBRARY "${TENSORRT_ROOTDIR}/lib/libnvinfer.so")
-    set(TENSORRT_ONNX_PARSER "${TENSORRT_ROOTDIR}/lib/libnvonnxparser.so")
-    
+
     # Find CUDA runtime
     find_package(CUDA QUIET)
     if(NOT CUDA_FOUND)
@@ -221,6 +182,7 @@ target_include_directories(rfdetr_inference_lib
     PUBLIC
         "${SOURCE_DIR}"
         "${OpenCV_INCLUDE_DIRS}"
+	"${TENSORRT_INCLUDE_DIR}"
 )
 
 # Add backend-specific includes and compile definitions
@@ -230,7 +192,10 @@ if(USE_ONNX_RUNTIME)
 endif()
 
 if(USE_TENSORRT)
-    target_include_directories(rfdetr_inference_lib PUBLIC "${TENSORRT_INCLUDE_DIR}")
+    target_include_directories(rfdetr_inference_lib PUBLIC
+        "${TENSORRT_INCLUDE_DIR}"
+	"${CUDA_TOOLKIT_INCLUDE}"
+    )
     target_compile_definitions(rfdetr_inference_lib PUBLIC USE_TENSORRT)
 endif()
 
