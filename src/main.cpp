@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
             int orig_h, orig_w;
             
             // Preprocess and run inference
-            std::vector<float> input_data = inference.preprocess_frame(frame, orig_h, orig_w);
+            std::vector<float> input_data = inference.preprocess_image(frame, orig_h, orig_w);
             inference.run_inference(input_data);
             
             // Post-process outputs
