@@ -162,7 +162,7 @@ struct ObjectPosition {
 ObjectPosition calculate_position(float bottom_center_x, float bottom_y,
                                   const cv::Mat& camera_matrix,
                                   float camera_height_ft = 2.0f,
-                                  float camera_pitch_deg = 0.0f) { // New parameter
+                                  float camera_pitch_deg = 30.0f) { // New parameter
     
     // Extract intrinsics
     float fx = static_cast<float>(camera_matrix.at<double>(0, 0));
