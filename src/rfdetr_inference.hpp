@@ -41,6 +41,8 @@ class RFDETRInference {
         // Preprocess the input image
         std::vector<float> preprocess_image(const std::filesystem::path& image_path, int& orig_h, int& orig_w);
         std::vector<float> preprocess_image(cv::Mat image, int& orig_h, int& orig_w);
+
+        std::vector<std::string> coco_labels_;
     
         // Run inference
         void run_inference(std::span<const float> input_data);
