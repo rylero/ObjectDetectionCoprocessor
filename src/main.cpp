@@ -179,19 +179,10 @@ ObjectPosition calculate_position(float bottom_center_x, float bottom_y,
 
     // 2. Apply Pitch Rotation (Rotation around X-axis)
     // Positive pitch = camera tilting down
-    float theta = camera_pitch_deg * (M_PI / 180.0f);
+    float theta = -camera_pitch_deg * (M_PI / 180.0f);  // note the minus
     float cos_t = std::cos(theta);
     float sin_t = std::sin(theta);
 
-    // Rotate the vector [u, v, 1]
-    // The standard rotation matrix for X-axis tilt:
-    // [1    0       0   ]
-    // [0  cos(t) -sin(t)]
-    // [0  sin(t)  cos(t)]
-    //
-    // Note: In OpenCV convention (Y-down), a positive pitch (looking down) 
-    // actually rotates Y toward Z. 
-    
     float ray_x = u_norm;
     float ray_y = v_norm * cos_t - 1.0f * sin_t;
     float ray_z = v_norm * sin_t + 1.0f * cos_t;
@@ -215,7 +206,6 @@ ObjectPosition calculate_position(float bottom_center_x, float bottom_y,
 
     // Scale factor to reach the ground
     float t = camera_height_m / ray_y;
-
     float ground_x = ray_x * t;
     float ground_z = ray_z * t;
 
