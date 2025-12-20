@@ -69,6 +69,7 @@ public:
     }
 
 private:
+    cudaStream_t stream_;
     // TensorRT logger
     class Logger : public nvinfer1::ILogger {
     public:

@@ -441,6 +441,7 @@ void RFDETRInference::draw_segmentation_masks(
     cv::addWeighted(overlay, alpha, image, 1.0f - alpha, 0, image);
 }
 
+
 std::optional<std::filesystem::path> RFDETRInference::save_output_image(
     const cv::Mat& image,
     const std::filesystem::path& output_path

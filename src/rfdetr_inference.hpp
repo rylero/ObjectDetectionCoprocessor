@@ -89,6 +89,7 @@ class RFDETRInference {
         // Getters for testing
         const std::vector<std::string>& get_coco_labels() const noexcept { return coco_labels_; }
         int get_resolution() const noexcept { return config_.resolution; }
+        std::vector<std::string> coco_labels_;
     
     private:
         // Load COCO labels from file
@@ -104,7 +105,6 @@ class RFDETRInference {
         std::unique_ptr<InferenceBackend> backend_;
     
         // Model parameters
-        std::vector<std::string> coco_labels_;
         Config config_;
         std::vector<int64_t> input_shape_;
         

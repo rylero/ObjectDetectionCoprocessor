@@ -23,6 +23,7 @@ TensorRTBackend::TensorRTBackend() {
     if (!runtime_) {
         throw std::runtime_error("Failed to create TensorRT runtime");
     }
+    cudaStreamCreate(&stream_);
 }
 
 TensorRTBackend::~TensorRTBackend() {
@@ -31,6 +32,10 @@ TensorRTBackend::~TensorRTBackend() {
         if (buffer) {
             cudaFree(buffer);
         }
+    }
+    
+    if (stream_) {
+        cudaStreamDestroy(stream_);
     }
 }
 
@@ -216,7 +221,7 @@ bool TensorRTBackend::build_engine_from_onnx(
     // Set memory pool limit for workspace (1GB)
     // Note: setMaxWorkspaceSize() was deprecated in TensorRT 8.4 and removed in 10.0
     #if NV_TENSORRT_MAJOR >= 10 || (NV_TENSORRT_MAJOR == 8 && NV_TENSORRT_MINOR >= 4)
-        config->setMemoryPoolLimit(nvinfer1::MemoryPoolType::kWORKSPACE, 1ULL << 30);
+        config->setMemoryPoolLimit(nvinfer1::MemoryPoolType::kWORKSPACE, 1ULL << 28);
     #else
         config->setMaxWorkspaceSize(1ULL << 30);
     #endif
@@ -306,30 +311,27 @@ bool TensorRTBackend::deserialize_engine(const std::filesystem::path& engine_pat
     std::cout << "[TensorRT] Engine loaded successfully" << std::endl;
     return true;
 }
-
 std::vector<void*> TensorRTBackend::run_inference(
     std::span<const float> input_data,
     const std::vector<int64_t>& input_shape
 ) {
-    // Copy input data to device
+    // Copy input data to device ASYNCHRONOUSLY
     size_t input_size = input_data.size() * sizeof(float);
-    cudaMemcpy(device_buffers_[input_binding_index_], input_data.data(), 
-               input_size, cudaMemcpyHostToDevice);
+    cudaMemcpyAsync(device_buffers_[input_binding_index_], input_data.data(), 
+                    input_size, cudaMemcpyHostToDevice, stream_);
 
-    // Execute inference
-    // Note: executeV2() was deprecated in TensorRT 8.5 and removed in 10.0
+    // Execute inference on the same stream
     #if NV_TENSORRT_MAJOR >= 10
-        // TensorRT 10+ uses enqueueV3 with tensor addresses set via setTensorAddress
-        // For simple synchronous execution, we still use the bindings array approach
-        // but need to set tensor addresses explicitly in newer versions
+        // Set tensor addresses
         for (int i = 0; i < static_cast<int>(device_buffers_.size()); ++i) {
             const char* name = engine_->getIOTensorName(i);
             context_->setTensorAddress(name, device_buffers_[i]);
         }
-        if (!context_->enqueueV3(0)) {  // 0 = CUDA stream (nullptr equivalent)
+        
+        // Use non-default stream instead of 0
+        if (!context_->enqueueV3(stream_)) {
             throw std::runtime_error("TensorRT inference execution failed");
         }
-        cudaStreamSynchronize(0);  // Synchronize since we're not using async
     #else
         // TensorRT 8.x API
         if (!context_->executeV2(device_buffers_.data())) {
@@ -337,13 +339,16 @@ std::vector<void*> TensorRTBackend::run_inference(
         }
     #endif
 
-    // Copy output data from device to host
+    // Copy output data from device to host ASYNCHRONOUSLY on the same stream
     for (size_t i = 0; i < output_binding_indices_.size(); ++i) {
         int binding_idx = output_binding_indices_[i];
         size_t output_size = host_output_buffers_[i].size() * sizeof(float);
-        cudaMemcpy(host_output_buffers_[i].data(), device_buffers_[binding_idx],
-                   output_size, cudaMemcpyDeviceToHost);
+        cudaMemcpyAsync(host_output_buffers_[i].data(), device_buffers_[binding_idx],
+                        output_size, cudaMemcpyDeviceToHost, stream_);
     }
+
+    // Synchronize the stream to ensure all operations complete
+    cudaStreamSynchronize(stream_);
 
     // Return pointers to host buffers
     std::vector<void*> output_ptrs;
@@ -353,6 +358,7 @@ std::vector<void*> TensorRTBackend::run_inference(
 
     return output_ptrs;
 }
+
 
 size_t TensorRTBackend::get_output_count() const {
     return output_binding_indices_.size();

@@ -5,6 +5,11 @@ project(rfdetr_inference CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# === DEBUG BUILD WITH SYMBOLS ===
+set(CMAKE_BUILD_TYPE Debug)           # or RelWithDebInfo
+set(CMAKE_CXX_FLAGS_DEBUG "-g -Og")   # -g = symbols, -Og = debug-friendly opt
+# set(CMAKE_CXX_FLAGS_DEBUG "-g -O0") # if you want NO optimization
+
 # --- Backend Selection Options ---
 option(USE_ONNX_RUNTIME "Build with ONNX Runtime backend support" OFF)
 option(USE_TENSORRT "Build with TensorRT backend support" ON)
@@ -203,6 +208,7 @@ endif()
 target_link_libraries(rfdetr_inference_lib
     PUBLIC
         "${OpenCV_LIBS}"
+        ntcore
 )
 
 if(USE_ONNX_RUNTIME)
@@ -228,6 +234,53 @@ if(USE_TENSORRT)
         INSTALL_RPATH_USE_LINK_PATH TRUE
     )
 endif()
+
+# --- Fetch WPILib NetworkTables (ntcore) & Dependencies ---
+include(FetchContent)
+
+set(WPI_VERSION "2025.1.1")
+set(WPI_MAVEN_URL "https://frcmaven.wpi.edu/artifactory/release/edu/wpi/first")
+
+function(fetch_wpilib_lib NAME)
+    FetchContent_Declare(
+        ${NAME}_headers
+        URL "${WPI_MAVEN_URL}/${NAME}/${NAME}-cpp/${WPI_VERSION}/${NAME}-cpp-${WPI_VERSION}-headers.zip"
+    )
+    FetchContent_MakeAvailable(${NAME}_headers)
+
+    FetchContent_Declare(
+        ${NAME}_libs
+        URL "${WPI_MAVEN_URL}/${NAME}/${NAME}-cpp/${WPI_VERSION}/${NAME}-cpp-${WPI_VERSION}-linuxarm64.zip"
+    )
+    FetchContent_MakeAvailable(${NAME}_libs)
+
+    # Define Header Target
+    add_library(${NAME}_inc INTERFACE)
+    target_include_directories(${NAME}_inc INTERFACE "${${NAME}_headers_SOURCE_DIR}")
+
+    # Define Shared Library Target
+    add_library(${NAME} SHARED IMPORTED)
+    # The libs are usually in linux/arm64/shared/ or directly in the zip root depending on the artifact
+    # For 2025 artifacts, they are typically in linuxarm64/
+    find_library(${NAME}_LIB_PATH 
+        NAMES ${NAME} 
+        PATHS "${${NAME}_libs_SOURCE_DIR}/linuxarm64" "${${NAME}_libs_SOURCE_DIR}/linux/arm64/shared"
+        NO_DEFAULT_PATH
+        REQUIRED
+    )
+    set_target_properties(${NAME} PROPERTIES IMPORTED_LOCATION "${${NAME}_LIB_PATH}")
+    target_link_libraries(${NAME} INTERFACE ${NAME}_inc)
+endfunction()
+
+# Fetch order matters for dependencies
+message(STATUS "Fetching WPILib (wpiutil, wpinet, ntcore) version ${WPI_VERSION}...")
+fetch_wpilib_lib(wpiutil)
+fetch_wpilib_lib(wpinet)
+fetch_wpilib_lib(ntcore)
+
+# Link dependencies: ntcore -> wpinet -> wpiutil
+target_link_libraries(wpinet INTERFACE wpiutil)
+target_link_libraries(ntcore INTERFACE wpinet)
 
 # --- Main Application ---
 add_executable(inference_app "${SOURCE_DIR}/main.cpp")
@@ -284,3 +337,16 @@ add_custom_target(run_tests
     COMMENT "Running all tests..."
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
+
+foreach(libname wpiutil wpinet ntcore)
+    # Get the path to the downloaded .so file
+    get_target_property(lib_loc ${libname} IMPORTED_LOCATION)
+    
+    # Copy it to the same folder as the executable
+    add_custom_command(TARGET inference_app POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${lib_loc}"
+        $<TARGET_FILE_DIR:inference_app>
+        COMMENT "Copying ${libname} library to output directory"
+    )
+endforeach()
