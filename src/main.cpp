@@ -428,7 +428,7 @@ int main(int argc, char* argv[]) {
         
         // SAFE: Now coco_labels_ is guaranteed to be populated
         std::cout << "Loaded " << inference.coco_labels_.size() 
-                  << " class labels. First: " << inference.coco_labels_[0] << "\n";
+                  << " class labels. First: " << inference.coco_labels_[0] << std::endl;
 
         // --- NetworkTables initialization (Team 6238) ---
         auto nt_inst = nt::NetworkTableInstance::GetDefault();
@@ -447,7 +447,7 @@ int main(int argc, char* argv[]) {
         auto heartbeat_pub = vision_table->GetIntegerTopic("heartbeat").Publish();
         auto connected_pub = vision_table->GetIntegerTopic("nt_connected").Publish();
 
-        std::cout << "UPDATED: NetworkTables initialized for team 6238 (Struct mode2)\n";
+        std::cout << "UPDATED: NetworkTables initialized for team 6238 (Struct mode2)" << std::endl;
 
         // Heartbeat counter
         int64_t heartbeat_counter = 0;
@@ -479,7 +479,7 @@ int main(int argc, char* argv[]) {
 
         ThreadedCamera camera(&inference, gpu_map1, gpu_map2);
 
-        std::cout << "Camera accessed successfully! Press ESC to quit.\n";
+        std::cout << "Camera accessed successfully! Press ESC to quit." << std::endl;
 
         cv::Mat undistorted_frame;
         std::vector<float> input_data;
