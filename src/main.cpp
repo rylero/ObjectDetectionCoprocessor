@@ -2,6 +2,8 @@
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/cudawarping.hpp>
+#include <opencv2/cudaarithm.hpp>
+#include <opencv2/cudaimgproc.hpp>
 
 #include <iostream>
 #include <cstring>

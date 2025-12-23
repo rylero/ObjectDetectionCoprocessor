@@ -116,3 +116,4 @@ coverage/
 *.prof
 gmon.out
 perf.data*
+.gradle/
